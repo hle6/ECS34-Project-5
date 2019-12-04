@@ -1,6 +1,12 @@
 #include "MapRouter.h" 	  			 	 
 #include <cmath>
-
+#include "CSVReader.h"
+#include "XMLReader.h"
+#include "XMLWriter.h"
+#include "CSVWriter.h"
+#include "XMLEntity.h"
+#include <fstream>
+#include <sstream>
 const CMapRouter::TNodeID CMapRouter::InvalidNodeID = -1;
 
 CMapRouter::CMapRouter(){
@@ -41,10 +47,74 @@ double CMapRouter::CalculateBearing(double lat1, double lon1,double lat2, double
 
 bool CMapRouter::LoadMapAndRoutes(std::istream &osm, std::istream &stops, std::istream &routes){
     // Your code HERE
-}
+   double WalkingSpeed = 3.0;
+    CXMLReader OSMReader(osm);
+    while(!OSMReader.End()) {
+        SXMLEntity Entity;
+        if(OSMReader.ReadEntity(Entity)) {
+            if(Entity.DType == SXMLEntity::EType::StartElement) {
+                if(Entity.DNameData == "node") {
+                    auto ID = std::stoul(Entity.AttributeValue("id"));
+                    double Latitude = std::stod(Entity.AttributeValue("lat"));
+                    double Longitude = std::stod(Entity.AttributeValue("lon"));
+                    SNode TempNode;
+                    TempNode.DNodeID = ID;
+                    TempNode.DLatitude = Latitude;
+                    TempNode.DLongitude = Longitude;
+                    DNodeIDToNodeIndex[ID] = DNodes.size();
+                    DNodes.push_back(TempNode);
+                    DSortedNodeIDs.push_back(TempNode.DNodeID);
+
+                }
+                if(Entity.DNameData == "way") {
+                    std::vector<TNodeIndex> TempIndices;
+                    bool IsOneWay = false;
+                    double MaxSpeed = 25;
+                    while(Entity.DNameData != "way" or Entity.DType != SXMLEntity::EType::EndElement){
+                        OSMReader.ReadEntity(Entity);
+
+                        if(Entity.DType == SXMLEntity::EType::StartElement) {
+                            if(Entity.DNameData == "nd") {
+                                TNodeID TempID = std::stoul(Entity.AttributeValue("ref"));
+                                auto Search = DNodeIDToNodeIndex.find(TempID);
+                                if(Search != DNodeIDToNodeIndex.end()) {
+                                    TempIndices.push_back(Search->second);
+                                }
+                            }
+                            if(Entity.DNameData == "tag") {
+                                if(Entity.AttributeValue("k") == "oneway") {
+                                    IsOneWay = Entity.AttributeValue("v") == "yes";
+                                }
+                                if(Entity.AttributeValue("k") == "maxspeed") {
+                                    std::stringstream TempStream(Entity.AttributeValue("v"));
+                                    TempStream>>MaxSpeed;
+                                }
+                            }
+                        }
+                    }
+                    for (size_t Index = 0; Index + 1 < TempIndices.size(); Index++) {
+                        SEdge TempEdge;
+                        auto FromNode = TempIndices[Index];
+                        auto ToNode = TempIndices[Index+1];
+                        TempEdge.DOtherNodeIndex = ToNode;
+                        TempEdge.DDistance = HaversineDistance(DNodes[FromNode].DLatitude,DNodes[FromNode].DLongitude, DNodes[ToNode].DLatitude, DNodes[ToNode].DLongitude);
+                        TempEdge.DTime = TempEdge.DDistance / WalkingSpeed;
+                        TempEdge.DMaxSpeed = MaxSpeed;
+                        DNodes[FromNode].DEdges.push_back(TempEdge);
+                        if (!IsOneWay) {
+                            TempEdge.DOtherNodeIndex = FromNode;
+                            DNodes[ToNode].DEdges.push_back(TempEdge);
+                        }
+                    }
+                }
+            }
+        }
+   
+}}
 
 size_t CMapRouter::NodeCount() const{
     // Your code HERE
+    return DNodes.size();
 }
 
 CMapRouter::TNodeID CMapRouter::GetSortedNodeIDByIndex(size_t index) const{

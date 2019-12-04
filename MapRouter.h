@@ -1,9 +1,9 @@
 #ifndef MAPROUTER_H 	  			 	 
 #define MAPROUTER_H
-
+#include<map>
 #include <vector>
 #include <istream>
-
+#include <unordered_map>
 class CMapRouter{
     public:
         using TNodeID = unsigned long;
@@ -13,6 +13,29 @@ class CMapRouter{
         
         static const TNodeID InvalidNodeID;
     private:
+        using TNodeIndex = size_t;
+        struct SEdge{
+            TNodeIndex DOtherNodeIndex;
+            int EdgeNOdes[2];
+            double DDistance;
+            double DTime;
+            double DMaxSpeed;
+
+        };
+
+        struct SNode{
+             TNodeID DNodeID;
+             double DLongitude;
+             double DLatitude;
+             std::vector<SEdge> DEdges;
+             bool walk;
+        };
+        std::vector<SNode> DNodes;
+        std::vector<TNodeID> DSortedNodeIDs;
+        std::unordered_map<TNodeID,TNodeIndex> DNodeIDToNodeIndex;
+        std::unordered_map<TStopID,TNodeID> DStopIDToNodeID;
+
+
         
     public:
         CMapRouter();
